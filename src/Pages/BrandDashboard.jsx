@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { db } from '../firebase'
-import { collection, getDocs, query, where } from 'firebase/firestore'
+import { collection, getDocs } from 'firebase/firestore'
 
 export default function BrandDashboard({ brand, onDiscover, onBack, theme: t }) {
   const [creators, setCreators] = useState([])
   const [campaigns, setCampaigns] = useState([])
+  const [applications, setApplications] = useState([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('campaigns')
 
@@ -24,6 +25,12 @@ export default function BrandDashboard({ brand, onDiscover, onBack, theme: t }) 
         const allCampaigns = campSnap.docs.map(d => ({ id: d.id, ...d.data() }))
         const myCampaigns = allCampaigns.filter(c => c.brandName === brand.brandName)
         setCampaigns(myCampaigns)
+        // Fetch applications for this brand's campaigns
+        const appSnap = await getDocs(collection(db, 'applications'))
+        const allApps = appSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+        const myCampaignTitles = myCampaigns.map(c => c.title)
+        const myApplications = allApps.filter(a => myCampaignTitles.includes(a.campaignTitle))
+        setApplications(myApplications)
       } catch (e) {
         console.error(e)
       }
