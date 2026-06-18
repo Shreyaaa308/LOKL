@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { db } from '../firebase'
-import { collection, getDocs } from 'firebase/firestore'
 import { getLocalCampaigns } from '../accountStore'
 import { collection, getDocs, addDoc } from 'firebase/firestore'
 
