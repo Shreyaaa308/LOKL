@@ -10,13 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "d3": "^7.9.0",
-    "d3-geo": "^3.1.1",
-    "firebase": "^12.14.0",
+    "firebase": "^12.15.0",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6",
-    "react-simple-maps": "^3.0.0",
-    "topojson-client": "^3.1.0"
+    "react-dom": "^19.2.6"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

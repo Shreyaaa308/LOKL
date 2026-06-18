@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { db } from '../firebase'
 import { collection, getDocs } from 'firebase/firestore'
+import { getLocalCampaigns } from '../accountStore'
 
-export default function Dashboard({ creator, onDiscover, onBack, theme: t }) {
+export default function Dashboard({ creator, onDiscover, onLogout, theme: t }) {
   const { score, name, city, language, niche, instagram, followers, state } = creator
   const [displayScore, setDisplayScore] = useState(0)
   const [campaigns, setCampaigns] = useState([])
@@ -24,21 +25,41 @@ export default function Dashboard({ creator, onDiscover, onBack, theme: t }) {
 
   useEffect(() => {
     const fetchCampaigns = async () => {
+      const fallbackCampaigns = getLocalCampaigns()
+      let allCampaigns = []
       try {
         const snap = await getDocs(collection(db, 'campaigns'))
-        const all = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-        // Show campaigns matching creator's city/state/language/niche
-        const matching = all.filter(c =>
-          c.status === 'open' && (
-            c.city === city ||
-            c.state === state ||
-            c.language === language ||
-            c.language === 'Any' ||
-            !c.language
-          )
+        const realCampaigns = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        // Deduplicate
+        const merged = [...realCampaigns]
+        const seenIds = new Set(realCampaigns.map(c => c.id))
+        const seenCampaignKeys = new Set(realCampaigns.map(c => `${c.brandName}-${c.title}`))
+        
+        fallbackCampaigns.forEach(c => {
+          const key = `${c.brandName}-${c.title}`
+          if (!seenIds.has(c.id) && !seenCampaignKeys.has(key)) {
+            merged.push(c)
+            seenIds.add(c.id)
+            seenCampaignKeys.add(key)
+          }
+        })
+        allCampaigns = merged
+      } catch (e) {
+        console.error("Firestore campaigns fetch failed, using local storage fallback:", e)
+        allCampaigns = fallbackCampaigns
+      }
+
+      // Show campaigns matching creator's city/state/language/niche
+      const matching = allCampaigns.filter(c =>
+        c.status === 'open' && (
+          c.city === city ||
+          c.state === state ||
+          c.language === language ||
+          c.language === 'Any' ||
+          !c.language
         )
-        setCampaigns(matching)
-      } catch (e) { console.error(e) }
+      )
+      setCampaigns(matching)
       setLoading(false)
     }
     fetchCampaigns()
@@ -220,7 +241,7 @@ export default function Dashboard({ creator, onDiscover, onBack, theme: t }) {
           </div>
         )}
 
-        <button onClick={onBack} style={{ width: '100%', background: 'transparent', color: t.muted, border: 'none', padding: '16px', fontSize: '13px', cursor: 'pointer', marginTop: '16px' }}>← Back to Home</button>
+        <button onClick={onLogout} style={{ width: '100%', background: 'transparent', color: t.muted, border: 'none', padding: '16px', fontSize: '13px', cursor: 'pointer', marginTop: '16px', fontWeight: '600' }}>🚪 Logout</button>
       </div>
     </div>
   )

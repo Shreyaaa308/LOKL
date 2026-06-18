@@ -1,6 +1,15 @@
 import { useState } from 'react'
 import { db } from '../firebase'
 import { collection, addDoc } from 'firebase/firestore'
+import { saveCreatorAccount } from '../accountStore'
+
+const saveWithTimeout = (promise, ms = 3000) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Firebase save timed out')), ms)
+    ),
+  ])
 
 const LANGUAGES = ['Hindi', 'Tamil', 'Telugu', 'Kannada', 'Marathi', 'Bengali', 'Gujarati', 'Punjabi', 'Malayalam', 'English']
 const NICHES = ['Food & Dining', 'Fashion', 'Education', 'Real Estate', 'Wedding', 'Fitness', 'Travel', 'Comedy', 'Tech', 'Local Services']
@@ -85,7 +94,7 @@ export default function Signup({ onDone, onBack, theme: t }) {
   const [step, setStep] = useState(1)
   const [form, setForm] = useState({
     name: '', state: '', city: '', pincode: '', language: '', niche: '',
-    instagram: '', followers: '', avgLikes: '', avgComments: '',
+    instagram: '', password: '', followers: '', avgLikes: '', avgComments: '',
     postsPerWeek: '', localFollowerPct: '', bio: ''
   })
   const [loading, setLoading] = useState(false)
@@ -95,15 +104,22 @@ export default function Signup({ onDone, onBack, theme: t }) {
   const submit = async () => {
     if (!form.language) { alert('Please select language!'); return }
     setLoading(true)
+    const score = calculateRealScore(form)
+    const data = { ...form, followers: parseInt(form.followers), score, type: 'creator', createdAt: new Date() }
+
     try {
-      const score = calculateRealScore(form)
-      const data = { ...form, followers: parseInt(form.followers), score, type: 'creator', createdAt: new Date() }
-      const ref = await addDoc(collection(db, 'creators'), data)
-      onDone({ ...data, id: ref.id })
+      const ref = await saveWithTimeout(addDoc(collection(db, 'creators'), data))
+      const savedCreator = { ...data, id: ref.id }
+      saveCreatorAccount(savedCreator)
+      onDone(savedCreator)
     } catch (e) {
-      alert('Error saving!'); console.error(e)
+      console.warn('Using local signup because Firebase is unavailable.', e)
+      const savedCreator = { ...data, id: `local-${Date.now()}` }
+      saveCreatorAccount(savedCreator)
+      onDone(savedCreator)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const inp = {
@@ -150,10 +166,11 @@ export default function Signup({ onDone, onBack, theme: t }) {
             <p style={{ fontSize: '13px', fontWeight: '700', color: t.purple, margin: '0 0 16px' }}>👤 Basic Info</p>
             <div style={{ marginBottom: '14px' }}>{label('Full Name *')}<input name="name" placeholder="Priya Sharma" value={form.name} onChange={handle} style={inp}/></div>
             <div style={{ marginBottom: '14px' }}>{label('Instagram Handle *')}<input name="instagram" placeholder="@priyaeats" value={form.instagram} onChange={handle} style={inp}/></div>
+            <div style={{ marginBottom: '14px' }}>{label('Password *')}<input name="password" type="password" placeholder="Create a password" value={form.password} onChange={handle} style={inp}/></div>
             <div style={{ marginBottom: '14px' }}>{label('Total Followers *')}<input name="followers" type="number" placeholder="8500" value={form.followers} onChange={handle} style={inp}/></div>
             <div style={{ marginBottom: '20px' }}>{label('Bio')}<input name="bio" placeholder="Tamil food creator in Coimbatore" value={form.bio} onChange={handle} style={inp}/></div>
             <button onClick={() => {
-              if (!form.name || !form.instagram || !form.followers) { alert('Fill required fields!'); return }
+              if (!form.name || !form.instagram || !form.password || !form.followers) { alert('Fill required fields!'); return }
               setStep(2)
             }} style={{ width: '100%', background: t.purple, color: 'white', border: 'none', padding: '13px', borderRadius: '8px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
               Next → Real Engagement Data

@@ -1,0 +1,111 @@
+const STORE_KEY = 'loklAccounts'
+
+export const SEED_CREATORS = [
+  { id: 's1', name: 'Ananya Krishnan', city: 'Chennai', state: 'Tamil Nadu', language: 'Tamil', niche: 'Food & Dining', instagram: '@ananyaeats', followers: 8200, avgLikes: 650, avgComments: 45, postsPerWeek: 5, localFollowerPct: 78, score: { total: 82, engagementAuth: 85, audienceSentiment: 76, contentConsistency: 85, localRelevance: 78, engagementRate: '8.47' } },
+  { id: 's2', name: 'Rahul Verma', city: 'Kanpur', state: 'Uttar Pradesh', language: 'Hindi', niche: 'Comedy', instagram: '@rahulcomedy', followers: 15400, avgLikes: 920, avgComments: 88, postsPerWeek: 4, localFollowerPct: 65, score: { total: 74, engagementAuth: 72, audienceSentiment: 79, contentConsistency: 70, localRelevance: 65, engagementRate: '6.54' } },
+  { id: 's3', name: 'Sneha Patil', city: 'Pune', state: 'Maharashtra', language: 'Marathi', niche: 'Fashion', instagram: '@snehastyle', followers: 6800, avgLikes: 510, avgComments: 38, postsPerWeek: 6, localFollowerPct: 72, score: { total: 79, engagementAuth: 80, audienceSentiment: 74, contentConsistency: 90, localRelevance: 72, engagementRate: '8.06' } },
+  { id: 's4', name: 'Karthik Reddy', city: 'Hyderabad', state: 'Telangana', language: 'Telugu', niche: 'Food & Dining', instagram: '@karthikeats', followers: 12000, avgLikes: 1100, avgComments: 92, postsPerWeek: 5, localFollowerPct: 85, score: { total: 86, engagementAuth: 88, audienceSentiment: 82, contentConsistency: 85, localRelevance: 85, engagementRate: '9.93' } },
+  { id: 's5', name: 'Priya Mehta', city: 'Surat', state: 'Gujarat', language: 'Gujarati', niche: 'Fashion', instagram: '@priyafashion', followers: 9500, avgLikes: 720, avgComments: 54, postsPerWeek: 4, localFollowerPct: 70, score: { total: 77, engagementAuth: 78, audienceSentiment: 74, contentConsistency: 70, localRelevance: 70, engagementRate: '8.15' } },
+  { id: 's6', name: 'Arjun Nair', city: 'Kochi', state: 'Kerala', language: 'Malayalam', niche: 'Travel', instagram: '@arjuntravels', followers: 11000, avgLikes: 880, avgComments: 70, postsPerWeek: 3, localFollowerPct: 60, score: { total: 75, engagementAuth: 82, audienceSentiment: 76, contentConsistency: 56, localRelevance: 60, engagementRate: '8.64' } },
+  { id: 's7', name: 'Divya Sharma', city: 'Jaipur', state: 'Rajasthan', language: 'Hindi', niche: 'Fashion', instagram: '@divyastyle', followers: 7500, avgLikes: 580, avgComments: 42, postsPerWeek: 5, localFollowerPct: 68, score: { total: 76, engagementAuth: 77, audienceSentiment: 72, contentConsistency: 85, localRelevance: 68, engagementRate: '8.29' } },
+  { id: 's8', name: 'Rohan Das', city: 'Kolkata', state: 'West Bengal', language: 'Bengali', niche: 'Food & Dining', instagram: '@rohanfoodie', followers: 9200, avgLikes: 810, avgComments: 65, postsPerWeek: 6, localFollowerPct: 80, score: { total: 83, engagementAuth: 85, audienceSentiment: 78, contentConsistency: 90, localRelevance: 80, engagementRate: '9.51' } },
+]
+
+const normalize = (value = '') => value.trim().toLowerCase()
+
+const readAccounts = () => {
+  try {
+    return JSON.parse(localStorage.getItem(STORE_KEY)) || { creators: [], brands: [] }
+  } catch {
+    return { creators: [], brands: [] }
+  }
+}
+
+const writeAccounts = (accounts) => {
+  localStorage.setItem(STORE_KEY, JSON.stringify(accounts))
+}
+
+export const saveCreatorAccount = (creator) => {
+  const accounts = readAccounts()
+  const key = normalize(creator.instagram || creator.email || creator.name)
+  accounts.creators = [
+    ...accounts.creators.filter((account) => normalize(account.instagram || account.email || account.name) !== key),
+    creator,
+  ]
+  writeAccounts(accounts)
+}
+
+export const saveBrandAccount = (brand) => {
+  const accounts = readAccounts()
+  const key = normalize(brand.phone || brand.email || brand.brandName)
+  accounts.brands = [
+    ...accounts.brands.filter((account) => normalize(account.phone || account.email || account.brandName) !== key),
+    brand,
+  ]
+  writeAccounts(accounts)
+}
+
+export const findCreatorAccount = (identifier, password) => {
+  const key = normalize(identifier)
+  return readAccounts().creators.find((account) => (
+    normalize(account.instagram) === key ||
+    normalize(account.email) === key ||
+    normalize(account.name) === key
+  ) && account.password === password)
+}
+
+export const findBrandAccount = (identifier, password) => {
+  const key = normalize(identifier)
+  return readAccounts().brands.find((account) => (
+    normalize(account.phone) === key ||
+    normalize(account.email) === key ||
+    normalize(account.brandName) === key
+  ) && account.password === password)
+}
+
+export const getCreators = () => {
+  const accounts = readAccounts()
+  const localCreators = accounts.creators || []
+  
+  const merged = [...SEED_CREATORS]
+  const seenIds = new Set(merged.map(c => c.id))
+  const seenInstagrams = new Set(merged.map(c => normalize(c.instagram)))
+  
+  localCreators.forEach(c => {
+    const normInsta = normalize(c.instagram)
+    if (!seenIds.has(c.id) && !seenInstagrams.has(normInsta)) {
+      merged.push(c)
+      seenIds.add(c.id)
+      seenInstagrams.add(normInsta)
+    }
+  })
+  
+  return merged
+}
+
+export const getLocalCampaigns = () => {
+  const accounts = readAccounts()
+  const campaigns = []
+  accounts.brands.forEach(brand => {
+    if (brand.campaign) {
+      campaigns.push({
+        id: brand.campaign.id || `campaign-${brand.id}`,
+        brandId: brand.id,
+        brandName: brand.brandName,
+        city: brand.city,
+        state: brand.state,
+        category: brand.category,
+        title: brand.campaign.title || brand.campaignTitle,
+        description: brand.campaign.description || brand.campaignDesc,
+        budget: brand.campaign.budget || brand.budget,
+        language: brand.campaign.language || brand.language,
+        targetNiche: brand.campaign.targetNiche || brand.targetNiche,
+        deliverables: brand.campaign.deliverables || brand.deliverables,
+        status: brand.campaign.status || 'open',
+        createdAt: brand.campaign.createdAt || brand.createdAt
+      })
+    }
+  })
+  return campaigns
+}
+

@@ -1,6 +1,15 @@
 import { useState } from 'react'
 import { db } from '../firebase'
 import { collection, addDoc } from 'firebase/firestore'
+import { saveBrandAccount } from '../accountStore'
+
+const saveWithTimeout = (promise, ms = 3000) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Firebase save timed out')), ms)
+    ),
+  ])
 
 const CATEGORIES = ['Restaurant / Food', 'Fashion / Clothing', 'Education / Coaching', 'Real Estate', 'Wedding / Events', 'Fitness / Gym', 'Travel / Tourism', 'Tech / Apps', 'Retail / Shopping', 'Beauty / Salon', 'Healthcare', 'Other']
 const LANGUAGES = ['Hindi', 'Tamil', 'Telugu', 'Kannada', 'Marathi', 'Bengali', 'Gujarati', 'Punjabi', 'Malayalam', 'English', 'Any']
@@ -41,7 +50,7 @@ const BUDGETS = ['Under ₹5,000', '₹5,000 – ₹15,000', '₹15,000 – ₹5
 export default function BrandSignup({ onDone, onBack, theme: t }) {
   const [step, setStep] = useState(1)
   const [form, setForm] = useState({
-    brandName: '', ownerName: '', phone: '', category: '',
+    brandName: '', ownerName: '', phone: '', password: '', category: '',
     state: '', city: '', pincode: '',
     campaignTitle: '', campaignDesc: '', budget: '', language: '', targetNiche: '',
     deliverables: ''
@@ -53,30 +62,39 @@ export default function BrandSignup({ onDone, onBack, theme: t }) {
   const submit = async () => {
     if (!form.campaignTitle || !form.budget) { alert('Fill required fields!'); return }
     setLoading(true)
-    try {
-      const data = { ...form, type: 'brand', createdAt: new Date() }
-      const ref = await addDoc(collection(db, 'brands'), data)
-      // Also save campaign
-      await addDoc(collection(db, 'campaigns'), {
-        brandId: ref.id,
-        brandName: form.brandName,
-        city: form.city,
-        state: form.state,
-        category: form.category,
-        title: form.campaignTitle,
-        description: form.campaignDesc,
-        budget: form.budget,
-        language: form.language,
-        targetNiche: form.targetNiche,
-        deliverables: form.deliverables,
-        status: 'open',
-        createdAt: new Date()
-      })
-      onDone({ ...data, id: ref.id })
-    } catch (e) {
-      alert('Error saving!'); console.error(e)
+    const data = { ...form, type: 'brand', createdAt: new Date() }
+    const campaign = {
+      brandName: form.brandName,
+      city: form.city,
+      state: form.state,
+      category: form.category,
+      title: form.campaignTitle,
+      description: form.campaignDesc,
+      budget: form.budget,
+      language: form.language,
+      targetNiche: form.targetNiche,
+      deliverables: form.deliverables,
+      status: 'open',
+      createdAt: new Date()
     }
-    setLoading(false)
+
+    try {
+      const ref = await saveWithTimeout(addDoc(collection(db, 'brands'), data))
+      await saveWithTimeout(addDoc(collection(db, 'campaigns'), {
+        brandId: ref.id,
+        ...campaign,
+      }))
+      const savedBrand = { ...data, id: ref.id }
+      saveBrandAccount(savedBrand)
+      onDone(savedBrand)
+    } catch (e) {
+      console.warn('Using local business signup because Firebase is unavailable.', e)
+      const savedBrand = { ...data, id: `local-${Date.now()}`, campaign }
+      saveBrandAccount(savedBrand)
+      onDone(savedBrand)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const inp = {
@@ -124,6 +142,7 @@ export default function BrandSignup({ onDone, onBack, theme: t }) {
             <div style={{ marginBottom: '14px' }}>{lbl('Business Name *')}<input name="brandName" placeholder="Sharma Sweets" value={form.brandName} onChange={handle} style={inp}/></div>
             <div style={{ marginBottom: '14px' }}>{lbl('Owner / Contact Name *')}<input name="ownerName" placeholder="Ramesh Sharma" value={form.ownerName} onChange={handle} style={inp}/></div>
             <div style={{ marginBottom: '14px' }}>{lbl('Phone Number *')}<input name="phone" placeholder="9876543210" value={form.phone} onChange={handle} style={inp}/></div>
+            <div style={{ marginBottom: '14px' }}>{lbl('Password *')}<input name="password" type="password" placeholder="Create a password" value={form.password} onChange={handle} style={inp}/></div>
             <div style={{ marginBottom: '20px' }}>
               {lbl('Business Category *')}
               <select name="category" value={form.category} onChange={handle} style={inp}>
@@ -132,7 +151,7 @@ export default function BrandSignup({ onDone, onBack, theme: t }) {
               </select>
             </div>
             <button onClick={() => {
-              if (!form.brandName || !form.ownerName || !form.phone || !form.category) { alert('Fill required fields!'); return }
+              if (!form.brandName || !form.ownerName || !form.phone || !form.password || !form.category) { alert('Fill required fields!'); return }
               setStep(2)
             }} style={{ width: '100%', background: t.purple, color: 'white', border: 'none', padding: '13px', borderRadius: '8px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
               Next → Location

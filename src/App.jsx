@@ -1,50 +1,123 @@
-import { useState } from 'react'
-import Landing from './pages/Landing'
-import CreatorSignup from './pages/Signup'
-import BrandSignup from './pages/BrandSignup'
-import Dashboard from './pages/Dashboard'
-import BrandDashboard from './pages/BrandDashboard'
-import Discover from './pages/Discover'
+import { useState } from "react";
+import Landing from "./Pages/Landing";
+import Login from "./Pages/Login";
+import Signup from "./Pages/Signup";
+import BrandSignup from "./Pages/BrandSignup";
+import Discover from "./Pages/Discover";
+import Dashboard from "./Pages/Dashboard";
+import BrandDashboard from "./Pages/BrandDashboard";
 
-export default function App() {
-  const [page, setPage] = useState('landing')
-  const [creator, setCreator] = useState(null)
-  const [brand, setBrand] = useState(null)
-  const [dark, setDark] = useState(false)
+const theme = {
+  bg: "#16171d",
+  text: "#f3f4f6",
+  muted: "#9ca3af",
+  purple: "#8b5cf6",
+  card: "#1f2028",
+  border: "#2e303a",
+  inputBg: "#111217",
+  shadow: "0 14px 40px rgba(0, 0, 0, 0.22)",
+  dark: true,
+};
 
-  const theme = {
-    dark,
-    bg: dark ? 'linear-gradient(160deg, #1a0a3c 0%, #2d1b5e 50%, #0f0826 100%)' : 'linear-gradient(160deg, #fdf6ff 0%, #f3ebff 50%, #faf7ff 100%)',
-    card: dark ? 'rgba(255,255,255,0.06)' : 'white',
-    border: dark ? 'rgba(255,255,255,0.1)' : '#e8deff',
-    text: dark ? '#f0e8ff' : '#1a0a3c',
-    muted: dark ? '#a78bca' : '#7a6a9a',
-    purple: '#7c4dcc',
-    inputBg: dark ? 'rgba(255,255,255,0.08)' : '#faf5ff',
-    shadow: dark ? '0 8px 40px rgba(0,0,0,0.4)' : '0 8px 40px rgba(124,77,204,0.08)',
+function App() {
+  const [view, setView] = useState("landing");
+  const [creator, setCreator] = useState(null);
+  const [brand, setBrand] = useState(null);
+  const [loginRole, setLoginRole] = useState("creator");
+
+  const goHome = () => setView("landing");
+  const goDiscover = () => setView("discover");
+  const goLogin = (role) => {
+    setLoginRole(role);
+    setView("login");
+  };
+  const handleLogout = () => {
+    setCreator(null);
+    setBrand(null);
+    setView("landing");
+  };
+
+  if (view === "login") {
+    return (
+      <Login
+        theme={theme}
+        initialRole={loginRole}
+        onBack={goHome}
+        onSignup={(role) => setView(role === "creator" ? "creatorSignup" : "brandSignup")}
+        onCreatorLogin={(loggedInCreator) => {
+          setCreator(loggedInCreator);
+          setView("creatorDashboard");
+        }}
+        onBrandLogin={(loggedInBrand) => {
+          setBrand(loggedInBrand);
+          setView("brandDashboard");
+        }}
+      />
+    );
   }
 
-  const toggleBtn = (
-    <button onClick={() => setDark(d => !d)} style={{
-      position: 'fixed', top: '16px', right: '16px', zIndex: 1000,
-      background: dark ? 'rgba(255,255,255,0.1)' : 'rgba(124,77,204,0.1)',
-      border: `1.5px solid ${dark ? 'rgba(255,255,255,0.2)' : '#d4c5f0'}`,
-      borderRadius: '50px', padding: '8px 16px', cursor: 'pointer',
-      fontSize: '14px', color: dark ? '#f0e8ff' : '#7c4dcc', fontWeight: '700',
-    }}>
-      {dark ? '☀️ Light' : '🌙 Dark'}
-    </button>
-  )
+  if (view === "creatorSignup") {
+    return (
+      <Signup
+        theme={theme}
+        onBack={goHome}
+        onDone={(createdCreator) => {
+          setCreator(createdCreator);
+          setView("creatorDashboard");
+        }}
+      />
+    );
+  }
+
+  if (view === "brandSignup") {
+    return (
+      <BrandSignup
+        theme={theme}
+        onBack={goHome}
+        onDone={(createdBrand) => {
+          setBrand(createdBrand);
+          setView("brandDashboard");
+        }}
+      />
+    );
+  }
+
+  if (view === "discover") {
+    return <Discover theme={theme} onBack={goHome} />;
+  }
+
+  if (view === "creatorDashboard" && creator) {
+    return (
+      <Dashboard
+        theme={theme}
+        creator={creator}
+        onLogout={handleLogout}
+        onDiscover={goDiscover}
+      />
+    );
+  }
+
+  if (view === "brandDashboard" && brand) {
+    return (
+      <BrandDashboard
+        theme={theme}
+        brand={brand}
+        onLogout={handleLogout}
+        onDiscover={goDiscover}
+      />
+    );
+  }
 
   return (
-    <div>
-      {toggleBtn}
-      {page === 'landing' && <Landing theme={theme} onCreator={() => setPage('creator-signup')} onBrand={() => setPage('brand-signup')} onDiscover={() => setPage('discover')} />}
-      {page === 'creator-signup' && <CreatorSignup theme={theme} onDone={(data) => { setCreator(data); setPage('dashboard') }} onBack={() => setPage('landing')} />}
-      {page === 'brand-signup' && <BrandSignup theme={theme} onDone={(data) => { setBrand(data); setPage('brand-dashboard') }} onBack={() => setPage('landing')} />}
-      {page === 'dashboard' && <Dashboard theme={theme} creator={creator} onDiscover={() => setPage('discover')} onBack={() => setPage('landing')} />}
-      {page === 'brand-dashboard' && <BrandDashboard theme={theme} brand={brand} onDiscover={() => setPage('discover')} onBack={() => setPage('landing')} />}
-      {page === 'discover' && <Discover theme={theme} onBack={() => setPage('landing')} />}
-    </div>
-  )
+    <Landing
+      theme={theme}
+      onCreator={() => setView("creatorSignup")}
+      onBrand={() => setView("brandSignup")}
+      onCreatorLogin={() => goLogin("creator")}
+      onBrandLogin={() => goLogin("brand")}
+      onDiscover={goDiscover}
+    />
+  );
 }
+
+export default App;

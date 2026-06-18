@@ -2,20 +2,10 @@ import { useState, useEffect } from 'react'
 import { db } from '../firebase'
 import { collection, getDocs } from 'firebase/firestore'
 import IndiaSVGMap from '../components/IndiaSVGMap'
+import { getCreators } from '../accountStore'
 
 const LANGUAGES = ['All', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Marathi', 'Bengali', 'Gujarati', 'Punjabi', 'Malayalam', 'English']
 const NICHES = ['All', 'Food & Dining', 'Fashion', 'Education', 'Real Estate', 'Wedding', 'Fitness', 'Travel', 'Comedy', 'Tech', 'Local Services']
-
-const SEED_CREATORS = [
-  { id: 's1', name: 'Ananya Krishnan', city: 'Chennai', state: 'Tamil Nadu', language: 'Tamil', niche: 'Food & Dining', instagram: '@ananyaeats', followers: 8200, avgLikes: 650, avgComments: 45, postsPerWeek: 5, localFollowerPct: 78, score: { total: 82, engagementAuth: 85, audienceSentiment: 76, contentConsistency: 85, localRelevance: 78, engagementRate: '8.47' } },
-  { id: 's2', name: 'Rahul Verma', city: 'Kanpur', state: 'Uttar Pradesh', language: 'Hindi', niche: 'Comedy', instagram: '@rahulcomedy', followers: 15400, avgLikes: 920, avgComments: 88, postsPerWeek: 4, localFollowerPct: 65, score: { total: 74, engagementAuth: 72, audienceSentiment: 79, contentConsistency: 70, localRelevance: 65, engagementRate: '6.54' } },
-  { id: 's3', name: 'Sneha Patil', city: 'Pune', state: 'Maharashtra', language: 'Marathi', niche: 'Fashion', instagram: '@snehastyle', followers: 6800, avgLikes: 510, avgComments: 38, postsPerWeek: 6, localFollowerPct: 72, score: { total: 79, engagementAuth: 80, audienceSentiment: 74, contentConsistency: 90, localRelevance: 72, engagementRate: '8.06' } },
-  { id: 's4', name: 'Karthik Reddy', city: 'Hyderabad', state: 'Telangana', language: 'Telugu', niche: 'Food & Dining', instagram: '@karthikeats', followers: 12000, avgLikes: 1100, avgComments: 92, postsPerWeek: 5, localFollowerPct: 85, score: { total: 86, engagementAuth: 88, audienceSentiment: 82, contentConsistency: 85, localRelevance: 85, engagementRate: '9.93' } },
-  { id: 's5', name: 'Priya Mehta', city: 'Surat', state: 'Gujarat', language: 'Gujarati', niche: 'Fashion', instagram: '@priyafashion', followers: 9500, avgLikes: 720, avgComments: 54, postsPerWeek: 4, localFollowerPct: 70, score: { total: 77, engagementAuth: 78, audienceSentiment: 74, contentConsistency: 70, localRelevance: 70, engagementRate: '8.15' } },
-  { id: 's6', name: 'Arjun Nair', city: 'Kochi', state: 'Kerala', language: 'Malayalam', niche: 'Travel', instagram: '@arjuntravels', followers: 11000, avgLikes: 880, avgComments: 70, postsPerWeek: 3, localFollowerPct: 60, score: { total: 75, engagementAuth: 82, audienceSentiment: 76, contentConsistency: 56, localRelevance: 60, engagementRate: '8.64' } },
-  { id: 's7', name: 'Divya Sharma', city: 'Jaipur', state: 'Rajasthan', language: 'Hindi', niche: 'Fashion', instagram: '@divyastyle', followers: 7500, avgLikes: 580, avgComments: 42, postsPerWeek: 5, localFollowerPct: 68, score: { total: 76, engagementAuth: 77, audienceSentiment: 72, contentConsistency: 85, localRelevance: 68, engagementRate: '8.29' } },
-  { id: 's8', name: 'Rohan Das', city: 'Kolkata', state: 'West Bengal', language: 'Bengali', niche: 'Food & Dining', instagram: '@rohanfoodie', followers: 9200, avgLikes: 810, avgComments: 65, postsPerWeek: 6, localFollowerPct: 80, score: { total: 83, engagementAuth: 85, audienceSentiment: 78, contentConsistency: 90, localRelevance: 80, engagementRate: '9.51' } },
-]
 
 export default function Discover({ onBack, theme: t }) {
   const [creators, setCreators] = useState([])
@@ -29,15 +19,29 @@ export default function Discover({ onBack, theme: t }) {
 
   useEffect(() => {
     const fetch = async () => {
+      const fallbackCreators = getCreators()
       try {
         const snap = await getDocs(collection(db, 'creators'))
         const real = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-        const all = [...SEED_CREATORS, ...real]
-        setCreators(all)
-        setFiltered(all)
+        // Merge real and fallback (local + seed) creators, deduplicated by instagram handle & id
+        const merged = [...real]
+        const seenIds = new Set(real.map(c => c.id))
+        const seenInstagrams = new Set(real.map(c => c.instagram?.trim().toLowerCase()))
+        
+        fallbackCreators.forEach(c => {
+          const normInsta = c.instagram?.trim().toLowerCase()
+          if (!seenIds.has(c.id) && !seenInstagrams.has(normInsta)) {
+            merged.push(c)
+            seenIds.add(c.id)
+            seenInstagrams.add(normInsta)
+          }
+        })
+        setCreators(merged)
+        setFiltered(merged)
       } catch (e) {
-        setCreators(SEED_CREATORS)
-        setFiltered(SEED_CREATORS)
+        console.error("Error fetching creators from Firebase, using local:", e)
+        setCreators(fallbackCreators)
+        setFiltered(fallbackCreators)
       }
       setLoading(false)
     }

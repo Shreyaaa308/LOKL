@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { db } from '../firebase'
-import { collection, getDocs, query, where } from 'firebase/firestore'
+import { collection, getDocs } from 'firebase/firestore'
+import { getCreators, getLocalCampaigns } from '../accountStore'
 
-export default function BrandDashboard({ brand, onDiscover, onBack, theme: t }) {
+export default function BrandDashboard({ brand, onDiscover, onLogout, theme: t }) {
   const [creators, setCreators] = useState([])
   const [campaigns, setCampaigns] = useState([])
   const [loading, setLoading] = useState(true)
@@ -10,23 +11,63 @@ export default function BrandDashboard({ brand, onDiscover, onBack, theme: t }) 
 
   useEffect(() => {
     const fetchData = async () => {
+      // 1. Fetch creators from same city/state
+      const fallbackCreators = getCreators()
+      let allCreators = []
       try {
-        // Fetch creators from same city
         const crSnap = await getDocs(collection(db, 'creators'))
-        const allCreators = crSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-        const localCreators = allCreators.filter(c =>
-          c.city === brand.city || c.state === brand.state
-        )
-        setCreators(localCreators)
-
-        // Fetch this brand's campaigns
-        const campSnap = await getDocs(collection(db, 'campaigns'))
-        const allCampaigns = campSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-        const myCampaigns = allCampaigns.filter(c => c.brandName === brand.brandName)
-        setCampaigns(myCampaigns)
+        const realCreators = crSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+        // Deduplicate creators
+        const mergedCreators = [...realCreators]
+        const seenCreatorIds = new Set(realCreators.map(c => c.id))
+        const seenInstagrams = new Set(realCreators.map(c => c.instagram?.trim().toLowerCase()))
+        
+        fallbackCreators.forEach(c => {
+          const normInsta = c.instagram?.trim().toLowerCase()
+          if (!seenCreatorIds.has(c.id) && !seenInstagrams.has(normInsta)) {
+            mergedCreators.push(c)
+            seenCreatorIds.add(c.id)
+            seenInstagrams.add(normInsta)
+          }
+        })
+        allCreators = mergedCreators
       } catch (e) {
-        console.error(e)
+        console.error("Firestore creators fetch failed, using local storage fallback:", e)
+        allCreators = fallbackCreators
       }
+      
+      const localCreators = allCreators.filter(c =>
+        c.city === brand.city || c.state === brand.state
+      )
+      setCreators(localCreators)
+
+      // 2. Fetch this brand's campaigns
+      const fallbackCampaigns = getLocalCampaigns()
+      let allCampaigns = []
+      try {
+        const campSnap = await getDocs(collection(db, 'campaigns'))
+        const realCampaigns = campSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+        // Deduplicate campaigns
+        const mergedCampaigns = [...realCampaigns]
+        const seenCampaignIds = new Set(realCampaigns.map(c => c.id))
+        const seenCampaignKeys = new Set(realCampaigns.map(c => `${c.brandName}-${c.title}`))
+        
+        fallbackCampaigns.forEach(c => {
+          const key = `${c.brandName}-${c.title}`
+          if (!seenCampaignIds.has(c.id) && !seenCampaignKeys.has(key)) {
+            mergedCampaigns.push(c)
+            seenCampaignIds.add(c.id)
+            seenCampaignKeys.add(key)
+          }
+        })
+        allCampaigns = mergedCampaigns
+      } catch (e) {
+        console.error("Firestore campaigns fetch failed, using local storage fallback:", e)
+        allCampaigns = fallbackCampaigns
+      }
+
+      const myCampaigns = allCampaigns.filter(c => c.brandName === brand.brandName)
+      setCampaigns(myCampaigns)
       setLoading(false)
     }
     fetchData()
@@ -179,7 +220,7 @@ export default function BrandDashboard({ brand, onDiscover, onBack, theme: t }) 
           </>
         )}
 
-        <button onClick={onBack} style={{ width: '100%', background: 'transparent', color: t.muted, border: 'none', padding: '16px', fontSize: '13px', cursor: 'pointer', marginTop: '24px' }}>← Back to Home</button>
+        <button onClick={onLogout} style={{ width: '100%', background: 'transparent', color: t.muted, border: 'none', padding: '16px', fontSize: '13px', cursor: 'pointer', marginTop: '24px', fontWeight: '600' }}>🚪 Logout</button>
       </div>
     </div>
   )
