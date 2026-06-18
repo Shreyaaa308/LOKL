@@ -2,12 +2,38 @@ import { useState, useEffect } from 'react'
 import { db } from '../firebase'
 import { collection, getDocs } from 'firebase/firestore'
 import { getLocalCampaigns } from '../accountStore'
+import { collection, getDocs, addDoc } from 'firebase/firestore'
 
 export default function Dashboard({ creator, onDiscover, onLogout, theme: t }) {
   const { score, name, city, language, niche, instagram, followers, state } = creator
   const [displayScore, setDisplayScore] = useState(0)
   const [campaigns, setCampaigns] = useState([])
   const [tab, setTab] = useState('score')
+  const [appliedCampaigns, setAppliedCampaigns] = useState([])
+const [applying, setApplying] = useState(null)
+
+const applyCampaign = async (campaign) => {
+  setApplying(campaign.id)
+  try {
+    await addDoc(collection(db, 'applications'), {
+      campaignId: campaign.id,
+      campaignTitle: campaign.title,
+      brandName: campaign.brandName,
+      creatorName: name,
+      creatorInstagram: instagram,
+      creatorScore: score.total,
+      creatorCity: city,
+      creatorLanguage: language,
+      status: 'pending',
+      appliedAt: new Date()
+    })
+    setAppliedCampaigns(prev => [...prev, campaign.id])
+  } catch (e) {
+    alert('Error applying!')
+    console.error(e)
+  }
+  setApplying(null)
+}
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -197,11 +223,19 @@ export default function Dashboard({ creator, onDiscover, onLogout, theme: t }) {
                         }}>{tag}</span>
                       ))}
                     </div>
-                    <button style={{
-                      width: '100%', background: t.purple, color: 'white',
-                      border: 'none', padding: '10px', borderRadius: '8px',
-                      fontSize: '13px', fontWeight: '700', cursor: 'pointer'
-                    }}>Apply for this Campaign →</button>
+                    {appliedCampaigns.includes(c.id) ? (
+                  <div style={{
+                      width: '100%', background: '#10b981', color: 'white',
+                         border: 'none', padding: '10px', borderRadius: '8px',
+                        fontSize: '13px', fontWeight: '700', textAlign: 'center'
+                     }}>✅ Applied Successfully</div>
+) : (
+  <button onClick={() => applyCampaign(c)} disabled={applying === c.id} style={{
+    width: '100%', background: applying === c.id ? '#b39ddb' : t.purple, color: 'white',
+    border: 'none', padding: '10px', borderRadius: '8px',
+    fontSize: '13px', fontWeight: '700', cursor: applying === c.id ? 'not-allowed' : 'pointer'
+  }}>{applying === c.id ? 'Applying...' : 'Apply for this Campaign →'}</button>
+)}
                   </div>
                 ))}
               </div>
