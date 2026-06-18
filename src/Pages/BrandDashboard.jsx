@@ -75,9 +75,10 @@ export default function BrandDashboard({ brand, onDiscover, onBack, theme: t }) 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
           {[
-            { key: 'campaigns', label: '📋 My Campaigns' },
-            { key: 'creators', label: '🎥 Local Creators' },
-          ].map(tb => (
+  { key: 'campaigns', label: '📋 My Campaigns' },
+  { key: 'applications', label: `📨 Applications (${applications.length})` },
+  { key: 'creators', label: '🎥 Local Creators' },
+].map(tb => (
             <button key={tb.key} onClick={() => setTab(tb.key)} style={{
               background: tab === tb.key ? t.purple : t.card,
               color: tab === tb.key ? 'white' : t.muted,
@@ -136,7 +137,44 @@ export default function BrandDashboard({ brand, onDiscover, onBack, theme: t }) 
                 )}
               </div>
             )}
-
+              {/* Applications Tab */}
+            {tab === 'applications' && (
+              <div>
+                {applications.length === 0 ? (
+                  <div style={{ ...card, textAlign: 'center', padding: '48px' }}>
+                    <div style={{ fontSize: '40px', marginBottom: '12px' }}>📨</div>
+                    <div style={{ color: t.muted, fontSize: '15px', fontWeight: '600' }}>No applications yet</div>
+                    <div style={{ color: t.purple, fontSize: '13px', marginTop: '4px' }}>Creators will apply to your campaigns soon!</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {applications.map(a => (
+                      <div key={a.id} style={card}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                          <div>
+                            <div style={{ fontWeight: '700', fontSize: '15px' }}>{a.creatorName}</div>
+                            <div style={{ color: t.muted, fontSize: '12px', marginTop: '2px' }}>{a.creatorInstagram} · {a.creatorCity}</div>
+                          </div>
+                          <div style={{
+                            background: getColor(a.creatorScore || 0),
+                            color: 'white', borderRadius: '8px',
+                            padding: '4px 10px', fontWeight: '800', fontSize: '16px'
+                          }}>{a.creatorScore}</div>
+                        </div>
+                        <div style={{ fontSize: '13px', color: t.muted, marginBottom: '10px' }}>
+                          Applied for: <b style={{ color: t.text }}>{a.campaignTitle}</b>
+                        </div>
+                        <span style={{
+                          background: '#f0a500', color: 'white',
+                          padding: '3px 10px', borderRadius: '20px',
+                          fontSize: '11px', fontWeight: '700'
+                        }}>PENDING REVIEW</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {/* Local Creators Tab */}
             {tab === 'creators' && (
               <div>
