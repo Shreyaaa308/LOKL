@@ -1,35 +1,50 @@
 import { useState, useEffect } from 'react'
 import { db } from '../firebase'
-import { getLocalCampaigns } from '../accountStore'
-import { collection, getDocs, addDoc } from 'firebase/firestore'
+import { getLocalApplications, getLocalCampaigns, saveLocalApplication } from '../accountStore'
+import { collection, getDocs, addDoc, query, where } from 'firebase/firestore'
+import ApplicationChat from '../components/ApplicationChat'
 
-export default function Dashboard({ creator, onDiscover, onLogout, theme: t }) {
+export default function Dashboard({ creator, onLogout, theme: t }) {
   const { score, name, city, language, niche, instagram, followers, state } = creator
   const [displayScore, setDisplayScore] = useState(0)
   const [campaigns, setCampaigns] = useState([])
   const [tab, setTab] = useState('score')
   const [appliedCampaigns, setAppliedCampaigns] = useState([])
+  const [applications, setApplications] = useState([])
+  const [selectedApplicationId, setSelectedApplicationId] = useState(null)
 const [applying, setApplying] = useState(null)
 
 const applyCampaign = async (campaign) => {
   setApplying(campaign.id)
+  const application = {
+    campaignId: campaign.id,
+    campaignTitle: campaign.title,
+    brandId: campaign.brandId,
+    brandName: campaign.brandName,
+    creatorId: creator.id,
+    creatorName: name,
+    creatorInstagram: instagram,
+    creatorScore: score.total,
+    creatorCity: city,
+    creatorLanguage: language,
+    status: 'pending',
+    appliedAt: new Date()
+  }
+
   try {
-    await addDoc(collection(db, 'applications'), {
-      campaignId: campaign.id,
-      campaignTitle: campaign.title,
-      brandName: campaign.brandName,
-      creatorName: name,
-      creatorInstagram: instagram,
-      creatorScore: score.total,
-      creatorCity: city,
-      creatorLanguage: language,
-      status: 'pending',
-      appliedAt: new Date()
-    })
+    const ref = await addDoc(collection(db, 'applications'), application)
+    const savedApplication = saveLocalApplication({ ...application, id: ref.id })
+    setApplications(prev => [...prev.filter(a => a.id !== savedApplication.id), savedApplication])
+    setSelectedApplicationId(ref.id)
     setAppliedCampaigns(prev => [...prev, campaign.id])
+    setTab('messages')
   } catch (e) {
-    alert('Error applying!')
-    console.error(e)
+    console.warn('Firebase application save failed, saving application locally:', e)
+    const savedApplication = saveLocalApplication(application)
+    setApplications(prev => [...prev.filter(a => a.id !== savedApplication.id), savedApplication])
+    setSelectedApplicationId(savedApplication.id)
+    setAppliedCampaigns(prev => [...prev, campaign.id])
+    setTab('messages')
   }
   setApplying(null)
 }
@@ -51,7 +66,7 @@ const applyCampaign = async (campaign) => {
   useEffect(() => {
     const fetchCampaigns = async () => {
       const fallbackCampaigns = getLocalCampaigns()
-      let allCampaigns = []
+      let allCampaigns
       try {
         const snap = await getDocs(collection(db, 'campaigns'))
         const realCampaigns = snap.docs.map(d => ({ id: d.id, ...d.data() }))
@@ -88,7 +103,50 @@ const applyCampaign = async (campaign) => {
       setLoading(false)
     }
     fetchCampaigns()
-  }, [])
+  }, [city, language, state])
+
+  useEffect(() => {
+    const fetchApplications = async () => {
+      const localApplications = getLocalApplications()
+      let realApplications = []
+
+      try {
+        if (creator.id) {
+          const appQuery = query(collection(db, 'applications'), where('creatorId', '==', creator.id))
+          const appSnap = await getDocs(appQuery)
+          realApplications = appSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+        } else {
+          const appSnap = await getDocs(collection(db, 'applications'))
+          realApplications = appSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+        }
+      } catch (e) {
+        console.error('Firestore creator applications fetch failed, using local applications:', e)
+      }
+
+      const seenIds = new Set(realApplications.map(a => a.id))
+      const mergedApplications = [
+        ...realApplications,
+        ...localApplications.filter(a => !seenIds.has(a.id)),
+      ]
+      const myApplications = mergedApplications.filter(a => (
+        (a.creatorId && a.creatorId === creator.id) ||
+        (a.creatorInstagram?.trim().toLowerCase() === instagram?.trim().toLowerCase())
+      ))
+
+      setApplications(myApplications)
+      setAppliedCampaigns(myApplications.map(a => a.campaignId))
+      if (!selectedApplicationId && myApplications.length > 0) {
+        setSelectedApplicationId(myApplications[0].id)
+      }
+    }
+    fetchApplications()
+  }, [creator.id, instagram, tab])
+
+  const updateApplicationStatus = (applicationId, status) => {
+    setApplications(current => current.map(application => (
+      application.id === applicationId ? { ...application, status } : application
+    )))
+  }
 
   const pillars = [
     { label: 'Engagement Authenticity', value: score.engagementAuth, color: '#7c4dcc' },
@@ -104,6 +162,7 @@ const applyCampaign = async (campaign) => {
     background: t.card, border: `1.5px solid ${t.border}`,
     borderRadius: '16px', padding: '24px', boxShadow: t.shadow
   }
+  const selectedApplication = applications.find(application => application.id === selectedApplicationId) || applications[0]
 
   return (
     <div style={{ minHeight: '100vh', background: t.bg, color: t.text, fontFamily: 'Inter, sans-serif', padding: '32px 20px' }}>
@@ -121,6 +180,7 @@ const applyCampaign = async (campaign) => {
           {[
             { key: 'score', label: '🛡️ My Score' },
             { key: 'campaigns', label: `📋 Campaigns (${campaigns.length})` },
+            { key: 'messages', label: `Messages (${applications.length})` },
             { key: 'profile', label: '👤 Profile' },
           ].map(tb => (
             <button key={tb.key} onClick={() => setTab(tb.key)} style={{
@@ -237,6 +297,46 @@ const applyCampaign = async (campaign) => {
 )}
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Messages Tab */}
+        {tab === 'messages' && (
+          <div>
+            {applications.length === 0 ? (
+              <div style={{ ...card, textAlign: 'center', padding: '48px' }}>
+                <div style={{ color: t.muted, fontSize: '15px', fontWeight: '600' }}>No conversations yet</div>
+                <div style={{ color: t.purple, fontSize: '13px', marginTop: '4px' }}>Apply to a campaign to start chatting with a brand.</div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '14px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {applications.map(application => (
+                    <button key={application.id} onClick={() => setSelectedApplicationId(application.id)} style={{
+                      background: selectedApplication?.id === application.id ? t.purple : t.card,
+                      color: selectedApplication?.id === application.id ? 'white' : t.text,
+                      border: `1.5px solid ${selectedApplication?.id === application.id ? t.purple : t.border}`,
+                      borderRadius: '8px',
+                      padding: '12px',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                    }}>
+                      <div style={{ fontWeight: 800, fontSize: '13px' }}>{application.brandName}</div>
+                      <div style={{ fontSize: '11px', opacity: 0.78, marginTop: '3px' }}>{application.campaignTitle}</div>
+                      <div style={{ fontSize: '10px', opacity: 0.78, marginTop: '6px', textTransform: 'uppercase', fontWeight: 800 }}>{application.status || 'pending'}</div>
+                    </button>
+                  ))}
+                </div>
+                <ApplicationChat
+                  application={selectedApplication}
+                  currentRole="creator"
+                  currentUserId={creator.id}
+                  currentUserName={name}
+                  onStatusChange={updateApplicationStatus}
+                  theme={t}
+                />
               </div>
             )}
           </div>

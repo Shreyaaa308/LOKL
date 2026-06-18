@@ -80,11 +80,11 @@ export default function BrandSignup({ onDone, onBack, theme: t }) {
 
     try {
       const ref = await saveWithTimeout(addDoc(collection(db, 'brands'), data))
-      await saveWithTimeout(addDoc(collection(db, 'campaigns'), {
+      const campaignRef = await saveWithTimeout(addDoc(collection(db, 'campaigns'), {
         brandId: ref.id,
         ...campaign,
       }))
-      const savedBrand = { ...data, id: ref.id }
+      const savedBrand = { ...data, id: ref.id, campaign: { ...campaign, id: campaignRef.id, brandId: ref.id } }
       saveBrandAccount(savedBrand)
       onDone(savedBrand)
     } catch (e) {

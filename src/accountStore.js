@@ -15,7 +15,8 @@ const normalize = (value = '') => value.trim().toLowerCase()
 
 const readAccounts = () => {
   try {
-    return JSON.parse(localStorage.getItem(STORE_KEY)) || { creators: [], brands: [] }
+    const data = JSON.parse(localStorage.getItem(STORE_KEY))
+    return { creators: [], brands: [], ...data }
   } catch {
     return { creators: [], brands: [] }
   }
@@ -109,3 +110,66 @@ export const getLocalCampaigns = () => {
   return campaigns
 }
 
+export const saveLocalApplication = (application) => {
+  const accounts = readAccounts()
+  const applicationWithId = {
+    ...application,
+    id: application.id || `application-${Date.now()}`,
+  }
+  const applications = accounts.applications || []
+  const duplicateKey = [
+    applicationWithId.campaignId,
+    applicationWithId.brandId,
+    normalize(applicationWithId.creatorInstagram || applicationWithId.creatorName),
+  ].join('|')
+
+  accounts.applications = [
+    ...applications.filter((existing) => {
+      const existingKey = [
+        existing.campaignId,
+        existing.brandId,
+        normalize(existing.creatorInstagram || existing.creatorName),
+      ].join('|')
+      return existingKey !== duplicateKey
+    }),
+    applicationWithId,
+  ]
+  writeAccounts(accounts)
+  return applicationWithId
+}
+
+export const getLocalApplications = () => {
+  const accounts = readAccounts()
+  return accounts.applications || []
+}
+
+export const updateLocalApplicationStatus = (applicationId, status) => {
+  const accounts = readAccounts()
+  accounts.applications = (accounts.applications || []).map((application) => (
+    application.id === applicationId
+      ? { ...application, status, statusUpdatedAt: new Date().toISOString() }
+      : application
+  ))
+  writeAccounts(accounts)
+}
+
+export const saveLocalMessage = (message) => {
+  const accounts = readAccounts()
+  const messageWithId = {
+    ...message,
+    id: message.id || `message-${Date.now()}`,
+  }
+  accounts.messages = [
+    ...(accounts.messages || []),
+    messageWithId,
+  ]
+  writeAccounts(accounts)
+  return messageWithId
+}
+
+export const getLocalMessages = (applicationId) => {
+  const accounts = readAccounts()
+  return (accounts.messages || [])
+    .filter((message) => message.applicationId === applicationId)
+    .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0))
+}

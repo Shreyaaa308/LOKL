@@ -1,20 +1,24 @@
 import { useState, useEffect } from 'react'
 import { db } from '../firebase'
-import { collection, getDocs } from 'firebase/firestore'
-import { getCreators, getLocalCampaigns } from '../accountStore'
+import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore'
+import { getCreators, getLocalApplications, getLocalCampaigns, updateLocalApplicationStatus } from '../accountStore'
+import ApplicationChat from '../components/ApplicationChat'
 
 export default function BrandDashboard({ brand, onDiscover, onLogout, theme: t }) {
   const [creators, setCreators] = useState([])
   const [campaigns, setCampaigns] = useState([])
   const [applications, setApplications] = useState([])
+  const [selectedApplicationId, setSelectedApplicationId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('campaigns')
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true)
+
       // 1. Fetch creators from same city/state
       const fallbackCreators = getCreators()
-      let allCreators = []
+      let allCreators
       try {
         const crSnap = await getDocs(collection(db, 'creators'))
         const realCreators = crSnap.docs.map(d => ({ id: d.id, ...d.data() }))
@@ -32,23 +36,6 @@ export default function BrandDashboard({ brand, onDiscover, onLogout, theme: t }
           }
         })
         allCreators = mergedCreators
-        const allCreators = crSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-        const localCreators = allCreators.filter(c =>
-          c.city === brand.city || c.state === brand.state
-        )
-        setCreators(localCreators)
-
-        // Fetch this brand's campaigns
-        const campSnap = await getDocs(collection(db, 'campaigns'))
-        const allCampaigns = campSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-        const myCampaigns = allCampaigns.filter(c => c.brandName === brand.brandName)
-        setCampaigns(myCampaigns)
-        // Fetch applications for this brand's campaigns
-        const appSnap = await getDocs(collection(db, 'applications'))
-        const allApps = appSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-        const myCampaignTitles = myCampaigns.map(c => c.title)
-        const myApplications = allApps.filter(a => myCampaignTitles.includes(a.campaignTitle))
-        setApplications(myApplications)
       } catch (e) {
         console.error("Firestore creators fetch failed, using local storage fallback:", e)
         allCreators = fallbackCreators
@@ -61,7 +48,7 @@ export default function BrandDashboard({ brand, onDiscover, onLogout, theme: t }
 
       // 2. Fetch this brand's campaigns
       const fallbackCampaigns = getLocalCampaigns()
-      let allCampaigns = []
+      let allCampaigns
       try {
         const campSnap = await getDocs(collection(db, 'campaigns'))
         const realCampaigns = campSnap.docs.map(d => ({ id: d.id, ...d.data() }))
@@ -84,12 +71,79 @@ export default function BrandDashboard({ brand, onDiscover, onLogout, theme: t }
         allCampaigns = fallbackCampaigns
       }
 
-      const myCampaigns = allCampaigns.filter(c => c.brandName === brand.brandName)
+      const myBrandId = brand.id
+      const myBrandName = brand.brandName?.trim().toLowerCase()
+      const myCampaigns = allCampaigns.filter(c =>
+         c.brandId && c.brandId === myBrandId
+    )
       setCampaigns(myCampaigns)
+
+      // 3. Fetch applications for this brand
+      const localApplications = getLocalApplications()
+      try {
+        let realApplications = []
+        if (myBrandId) {
+          const appQuery = query(collection(db, 'applications'), where('brandId', '==', myBrandId))
+          const appSnap = await getDocs(appQuery)
+          realApplications = appSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+        } else {
+          const appSnap = await getDocs(collection(db, 'applications'))
+          realApplications = appSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+        }
+
+        const mergedApplications = [...realApplications]
+        const seenApplicationIds = new Set(realApplications.map(a => a.id))
+        localApplications.forEach(a => {
+          if (!seenApplicationIds.has(a.id)) {
+            mergedApplications.push(a)
+            seenApplicationIds.add(a.id)
+          }
+        })
+
+        const myCampaignIds = new Set(myCampaigns.map(c => c.id))
+        const myApplications = mergedApplications.filter(a =>
+          (a.brandId && a.brandId === myBrandId) ||
+          (a.campaignId && myCampaignIds.has(a.campaignId)) ||
+          (a.brandName?.trim().toLowerCase() === myBrandName)
+        )
+        setApplications(myApplications)
+        if (!selectedApplicationId && myApplications.length > 0) {
+          setSelectedApplicationId(myApplications[0].id)
+        }
+      } catch (e) {
+        console.error("Firestore applications fetch failed:", e)
+        const myCampaignIds = new Set(myCampaigns.map(c => c.id))
+        const myApplications = localApplications.filter(a =>
+          (a.brandId && a.brandId === myBrandId) ||
+          (a.campaignId && myCampaignIds.has(a.campaignId)) ||
+          (a.brandName?.trim().toLowerCase() === myBrandName)
+        )
+        setApplications(myApplications)
+        if (!selectedApplicationId && myApplications.length > 0) {
+          setSelectedApplicationId(myApplications[0].id)
+        }
+      }
+
       setLoading(false)
     }
     fetchData()
-  }, [])
+  }, [brand.id, brand.brandName, brand.city, brand.state, tab])
+
+  const updateApplicationStatus = async (applicationId, status) => {
+    try {
+      await updateDoc(doc(db, 'applications', applicationId), {
+        status,
+        statusUpdatedAt: new Date(),
+      })
+    } catch (e) {
+      console.warn('Firestore application status update failed, updating local fallback:', e)
+    } finally {
+      updateLocalApplicationStatus(applicationId, status)
+      setApplications(current => current.map(application => (
+        application.id === applicationId ? { ...application, status } : application
+      )))
+    }
+  }
 
   const getColor = (s) => s >= 80 ? '#7c4dcc' : s >= 65 ? '#9b6dd6' : s >= 50 ? '#f0a500' : '#e57373'
 
@@ -97,6 +151,7 @@ export default function BrandDashboard({ brand, onDiscover, onLogout, theme: t }
     background: t.card, border: `1.5px solid ${t.border}`,
     borderRadius: '14px', padding: '20px', boxShadow: t.shadow
   }
+  const selectedApplication = applications.find(application => application.id === selectedApplicationId) || applications[0]
 
   return (
     <div style={{ minHeight: '100vh', background: t.bg, color: t.text, fontFamily: 'Inter, sans-serif', padding: '32px 20px' }}>
@@ -199,9 +254,15 @@ export default function BrandDashboard({ brand, onDiscover, onLogout, theme: t }
                     <div style={{ color: t.purple, fontSize: '13px', marginTop: '4px' }}>Creators will apply to your campaigns soon!</div>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '14px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {applications.map(a => (
-                      <div key={a.id} style={card}>
+                      <button key={a.id} onClick={() => setSelectedApplicationId(a.id)} style={{
+                        ...card,
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        background: selectedApplication?.id === a.id ? 'rgba(139,92,246,0.18)' : t.card,
+                      }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                           <div>
                             <div style={{ fontWeight: '700', fontSize: '15px' }}>{a.creatorName}</div>
@@ -216,13 +277,48 @@ export default function BrandDashboard({ brand, onDiscover, onLogout, theme: t }
                         <div style={{ fontSize: '13px', color: t.muted, marginBottom: '10px' }}>
                           Applied for: <b style={{ color: t.text }}>{a.campaignTitle}</b>
                         </div>
-                        <span style={{
-                          background: '#f0a500', color: 'white',
-                          padding: '3px 10px', borderRadius: '20px',
-                          fontSize: '11px', fontWeight: '700'
-                        }}>PENDING REVIEW</span>
-                      </div>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                          <span style={{
+                            background: a.status === 'approved' ? '#10b981' : a.status === 'rejected' ? '#e57373' : '#f0a500',
+                            color: 'white',
+                            padding: '3px 10px',
+                            borderRadius: '20px',
+                            fontSize: '11px',
+                            fontWeight: '700',
+                            textTransform: 'uppercase',
+                          }}>{a.status || 'pending'}</span>
+                          <span onClick={(event) => { event.stopPropagation(); updateApplicationStatus(a.id, 'approved') }} style={{
+                            background: '#10b981',
+                            color: 'white',
+                            padding: '5px 10px',
+                            borderRadius: '8px',
+                            fontSize: '11px',
+                            fontWeight: 800,
+                          }}>Approve</span>
+                          <span onClick={(event) => { event.stopPropagation(); updateApplicationStatus(a.id, 'rejected') }} style={{
+                            background: '#e57373',
+                            color: 'white',
+                            padding: '5px 10px',
+                            borderRadius: '8px',
+                            fontSize: '11px',
+                            fontWeight: 800,
+                          }}>Reject</span>
+                        </div>
+                      </button>
                     ))}
+                    </div>
+                    <ApplicationChat
+                      application={selectedApplication}
+                      currentRole="brand"
+                      currentUserId={brand.id}
+                      currentUserName={brand.brandName}
+                      onStatusChange={(applicationId, status) => {
+                        setApplications(current => current.map(application => (
+                          application.id === applicationId ? { ...application, status } : application
+                        )))
+                      }}
+                      theme={t}
+                    />
                   </div>
                 )}
               </div>
