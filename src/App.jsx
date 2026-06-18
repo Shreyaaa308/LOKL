@@ -7,23 +7,48 @@ import Discover from "./Pages/Discover";
 import Dashboard from "./Pages/Dashboard";
 import BrandDashboard from "./Pages/BrandDashboard";
 
-const theme = {
-  bg: "#16171d",
-  text: "#f3f4f6",
-  muted: "#9ca3af",
-  purple: "#8b5cf6",
-  card: "#1f2028",
-  border: "#2e303a",
-  inputBg: "#111217",
-  shadow: "0 14px 40px rgba(0, 0, 0, 0.22)",
-  dark: true,
-};
-
 function App() {
+  const [dark, setDark] = useState(false);
   const [view, setView] = useState("landing");
   const [creator, setCreator] = useState(null);
   const [brand, setBrand] = useState(null);
   const [loginRole, setLoginRole] = useState("creator");
+
+  const theme = {
+    dark,
+    bg: dark
+  ? "linear-gradient(160deg, #2d1f54 0%, #3d2b6e 50%, #251a42 100%)"
+  : "linear-gradient(160deg, #fdf6ff 0%, #f3ebff 50%, #faf7ff 100%)",
+    card: dark ? "rgba(255,255,255,0.06)" : "white",
+    border: dark ? "rgba(255,255,255,0.1)" : "#e8deff",
+    text: dark ? "#f0e8ff" : "#1a0a3c",
+    muted: dark ? "#a78bca" : "#7a6a9a",
+    purple: "#7c4dcc",
+    inputBg: dark ? "rgba(255,255,255,0.08)" : "#faf5ff",
+    shadow: dark ? "0 8px 40px rgba(0,0,0,0.4)" : "0 8px 40px rgba(124,77,204,0.08)",
+  };
+
+  const toggleBtn = (
+    <button
+      onClick={() => setDark((d) => !d)}
+      style={{
+        position: "fixed",
+        top: "16px",
+        right: "16px",
+        zIndex: 1000,
+        background: dark ? "rgba(255,255,255,0.1)" : "rgba(124,77,204,0.1)",
+        border: `1.5px solid ${dark ? "rgba(255,255,255,0.2)" : "#d4c5f0"}`,
+        borderRadius: "50px",
+        padding: "8px 16px",
+        cursor: "pointer",
+        fontSize: "14px",
+        color: dark ? "#f0e8ff" : "#7c4dcc",
+        fontWeight: "700",
+      }}
+    >
+      {dark ? "☀️ Light" : "🌙 Dark"}
+    </button>
+  );
 
   const goHome = () => setView("landing");
   const goDiscover = () => setView("discover");
@@ -39,84 +64,107 @@ function App() {
 
   if (view === "login") {
     return (
-      <Login
-        theme={theme}
-        initialRole={loginRole}
-        onBack={goHome}
-        onSignup={(role) => setView(role === "creator" ? "creatorSignup" : "brandSignup")}
-        onCreatorLogin={(loggedInCreator) => {
-          setCreator(loggedInCreator);
-          setView("creatorDashboard");
-        }}
-        onBrandLogin={(loggedInBrand) => {
-          setBrand(loggedInBrand);
-          setView("brandDashboard");
-        }}
-      />
+      <div>
+        {toggleBtn}
+        <Login
+          theme={theme}
+          initialRole={loginRole}
+          onBack={goHome}
+          onSignup={(role) => setView(role === "creator" ? "creatorSignup" : "brandSignup")}
+          onCreatorLogin={(loggedInCreator) => {
+            setCreator(loggedInCreator);
+            setView("creatorDashboard");
+          }}
+          onBrandLogin={(loggedInBrand) => {
+            setBrand(loggedInBrand);
+            setView("brandDashboard");
+          }}
+        />
+      </div>
     );
   }
 
   if (view === "creatorSignup") {
     return (
-      <Signup
-        theme={theme}
-        onBack={goHome}
-        onDone={(createdCreator) => {
-          setCreator(createdCreator);
-          setView("creatorDashboard");
-        }}
-      />
+      <div>
+        {toggleBtn}
+        <Signup
+          theme={theme}
+          onBack={goHome}
+          onDone={(createdCreator) => {
+            setCreator(createdCreator);
+            setView("creatorDashboard");
+          }}
+        />
+      </div>
     );
   }
 
   if (view === "brandSignup") {
     return (
-      <BrandSignup
-        theme={theme}
-        onBack={goHome}
-        onDone={(createdBrand) => {
-          setBrand(createdBrand);
-          setView("brandDashboard");
-        }}
-      />
+      <div>
+        {toggleBtn}
+        <BrandSignup
+          theme={theme}
+          onBack={goHome}
+          onDone={(createdBrand) => {
+            setBrand(createdBrand);
+            setView("brandDashboard");
+          }}
+        />
+      </div>
     );
   }
 
   if (view === "discover") {
-    return <Discover theme={theme} onBack={goHome} />;
+    return (
+      <div>
+        {toggleBtn}
+        <Discover theme={theme} onBack={goHome} />
+      </div>
+    );
   }
 
   if (view === "creatorDashboard" && creator) {
     return (
-      <Dashboard
-        theme={theme}
-        creator={creator}
-        onLogout={handleLogout}
-        onDiscover={goDiscover}
-      />
+      <div>
+        {toggleBtn}
+        <Dashboard
+          theme={theme}
+          creator={creator}
+          onLogout={handleLogout}
+          onDiscover={goDiscover}
+        />
+      </div>
     );
   }
 
   if (view === "brandDashboard" && brand) {
     return (
-      <BrandDashboard
-        theme={theme}
-        brand={brand}
-        onLogout={handleLogout}
-        onDiscover={goDiscover}
-      />
+      <div>
+        {toggleBtn}
+        <BrandDashboard
+          theme={theme}
+          brand={brand}
+          onLogout={handleLogout}
+          onDiscover={goDiscover}
+        />
+      </div>
     );
   }
 
   return (
-    <Landing
-      theme={theme}
-      onCreator={() => setView("creatorSignup")}
-      onBrand={() => setView("brandSignup")}
-      onCreatorLogin={() => goLogin("creator")}
-      onBrandLogin={() => goLogin("brand")}
-      onDiscover={goDiscover}
-    />
+    <div>
+      {toggleBtn}
+      <Landing
+        theme={theme}
+        onCreator={() => setView("creatorSignup")}
+        onBrand={() => setView("brandSignup")}
+        onCreatorLogin={() => goLogin("creator")}
+        onBrandLogin={() => goLogin("brand")}
+        onDiscover={goDiscover}
+      />
+    </div>
   );
 }
 
