@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { db } from '../firebase'
-import { getLocalApplications, getLocalCampaigns, saveLocalApplication } from '../accountStore'
+import { getLocalApplications, getLocalCampaigns, saveLocalApplication, getCreatorEscrows } from '../accountStore'
 import { collection, getDocs, addDoc, query, where } from 'firebase/firestore'
 import ApplicationChat from '../components/ApplicationChat'
 
@@ -13,6 +13,7 @@ export default function Dashboard({ creator, onLogout, theme: t }) {
   const [applications, setApplications] = useState([])
   const [selectedApplicationId, setSelectedApplicationId] = useState(null)
 const [applying, setApplying] = useState(null)
+const [escrows, setEscrows] = useState([])
 
 const applyCampaign = async (campaign) => {
   setApplying(campaign.id)
@@ -141,7 +142,10 @@ const applyCampaign = async (campaign) => {
     }
     fetchApplications()
   }, [creator.id, instagram, tab])
-
+  useEffect(() => {
+    const myEscrows = getCreatorEscrows(creator.id, instagram)
+    setEscrows(myEscrows)
+  }, [creator.id, instagram, tab])
   const updateApplicationStatus = (applicationId, status) => {
     setApplications(current => current.map(application => (
       application.id === applicationId ? { ...application, status } : application
@@ -181,6 +185,7 @@ const applyCampaign = async (campaign) => {
             { key: 'score', label: '🛡️ My Score' },
             { key: 'campaigns', label: `📋 Campaigns (${campaigns.length})` },
             { key: 'messages', label: `Messages (${applications.length})` },
+            { key: 'earnings', label: `💰 Earnings (${escrows.length})` },
             { key: 'profile', label: '👤 Profile' },
           ].map(tb => (
             <button key={tb.key} onClick={() => setTab(tb.key)} style={{
@@ -337,6 +342,66 @@ const applyCampaign = async (campaign) => {
                   onStatusChange={updateApplicationStatus}
                   theme={t}
                 />
+              </div>
+            )}
+          </div>
+        )}
+        {/* Earnings Tab */}
+        {tab === 'earnings' && (
+          <div>
+            {escrows.length === 0 ? (
+              <div style={{ ...card, textAlign: 'center', padding: '48px' }}>
+                <div style={{ fontSize: '40px', marginBottom: '12px' }}>💰</div>
+                <div style={{ color: t.muted, fontSize: '15px', fontWeight: '600' }}>No earnings yet</div>
+                <div style={{ color: t.purple, fontSize: '13px', marginTop: '4px' }}>Apply to campaigns and get approved to start earning!</div>
+              </div>
+            ) : (
+              <div>
+                {/* Summary cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                  <div style={{ ...card, textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', color: t.muted, fontWeight: '700', marginBottom: '6px' }}>TOTAL EARNED</div>
+                    <div style={{ fontSize: '24px', fontWeight: '900', color: '#10b981' }}>
+                      ₹{escrows.filter(e => e.status === 'released').reduce((sum, e) => sum + e.creatorPayout, 0).toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                  <div style={{ ...card, textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', color: t.muted, fontWeight: '700', marginBottom: '6px' }}>PENDING (HELD)</div>
+                    <div style={{ fontSize: '24px', fontWeight: '900', color: '#f0a500' }}>
+                      ₹{escrows.filter(e => e.status === 'held').reduce((sum, e) => sum + e.creatorPayout, 0).toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {escrows.map(e => (
+                    <div key={e.id} style={card}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                        <div>
+                          <div style={{ fontWeight: '700', fontSize: '15px' }}>{e.campaignTitle}</div>
+                          <div style={{ color: t.muted, fontSize: '12px', marginTop: '2px' }}>{e.brandName}</div>
+                        </div>
+                        <span style={{
+                          background: e.status === 'released' ? '#10b981' : '#f0a500',
+                          color: 'white', padding: '3px 10px', borderRadius: '20px',
+                          fontSize: '11px', fontWeight: '700', textTransform: 'uppercase'
+                        }}>{e.status === 'released' ? '✅ Paid' : '⏳ Held'}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '3px' }}>
+                        <span style={{ color: t.muted }}>Total Campaign Budget</span>
+                        <span style={{ fontWeight: '700' }}>₹{e.totalAmount.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '3px' }}>
+                        <span style={{ color: t.muted }}>LOKL Commission (10%)</span>
+                        <span style={{ fontWeight: '700', color: '#e57373' }}>-₹{e.commission.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', paddingTop: '6px', borderTop: `1px solid ${t.border}` }}>
+                        <span style={{ fontWeight: '700' }}>You {e.status === 'released' ? 'Received' : 'Will Receive'}</span>
+                        <span style={{ fontWeight: '800', color: '#10b981' }}>₹{e.creatorPayout.toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
