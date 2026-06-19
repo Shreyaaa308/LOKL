@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { db } from '../firebase'
 import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore'
-import { getCreators, getLocalApplications, getLocalCampaigns, updateLocalApplicationStatus } from '../accountStore'
+import { getCreators, getLocalApplications, getLocalCampaigns, updateLocalApplicationStatus, createEscrow, getEscrowByApplication, releaseEscrow, parseBudgetToNumber } from '../accountStore'
 import ApplicationChat from '../components/ApplicationChat'
 
 export default function BrandDashboard({ brand, onDiscover, onLogout, theme: t }) {
@@ -22,11 +22,10 @@ export default function BrandDashboard({ brand, onDiscover, onLogout, theme: t }
       try {
         const crSnap = await getDocs(collection(db, 'creators'))
         const realCreators = crSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-        // Deduplicate creators
         const mergedCreators = [...realCreators]
         const seenCreatorIds = new Set(realCreators.map(c => c.id))
         const seenInstagrams = new Set(realCreators.map(c => c.instagram?.trim().toLowerCase()))
-        
+
         fallbackCreators.forEach(c => {
           const normInsta = c.instagram?.trim().toLowerCase()
           if (!seenCreatorIds.has(c.id) && !seenInstagrams.has(normInsta)) {
@@ -40,7 +39,7 @@ export default function BrandDashboard({ brand, onDiscover, onLogout, theme: t }
         console.error("Firestore creators fetch failed, using local storage fallback:", e)
         allCreators = fallbackCreators
       }
-      
+
       const localCreators = allCreators.filter(c =>
         c.city === brand.city || c.state === brand.state
       )
@@ -52,11 +51,10 @@ export default function BrandDashboard({ brand, onDiscover, onLogout, theme: t }
       try {
         const campSnap = await getDocs(collection(db, 'campaigns'))
         const realCampaigns = campSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-        // Deduplicate campaigns
         const mergedCampaigns = [...realCampaigns]
         const seenCampaignIds = new Set(realCampaigns.map(c => c.id))
         const seenCampaignKeys = new Set(realCampaigns.map(c => `${c.brandName}-${c.title}`))
-        
+
         fallbackCampaigns.forEach(c => {
           const key = `${c.brandName}-${c.title}`
           if (!seenCampaignIds.has(c.id) && !seenCampaignKeys.has(key)) {
@@ -74,8 +72,8 @@ export default function BrandDashboard({ brand, onDiscover, onLogout, theme: t }
       const myBrandId = brand.id
       const myBrandName = brand.brandName?.trim().toLowerCase()
       const myCampaigns = allCampaigns.filter(c =>
-         c.brandId && c.brandId === myBrandId
-    )
+        c.brandId && c.brandId === myBrandId
+      )
       setCampaigns(myCampaigns)
 
       // 3. Fetch applications for this brand
@@ -142,7 +140,22 @@ export default function BrandDashboard({ brand, onDiscover, onLogout, theme: t }
       setApplications(current => current.map(application => (
         application.id === applicationId ? { ...application, status } : application
       )))
+
+      // When approved, create an escrow hold for this application
+      if (status === 'approved') {
+        const application = applications.find(a => a.id === applicationId)
+        if (application) {
+          const matchingCampaign = campaigns.find(c => c.id === application.campaignId)
+          const budgetAmount = parseBudgetToNumber(matchingCampaign?.budget)
+          createEscrow(application, budgetAmount)
+        }
+      }
     }
+  }
+
+  const handleReleasePayment = (applicationId) => {
+    releaseEscrow(applicationId)
+    setApplications(current => [...current]) // trigger re-render
   }
 
   const getColor = (s) => s >= 80 ? '#7c4dcc' : s >= 65 ? '#9b6dd6' : s >= 50 ? '#f0a500' : '#e57373'
@@ -182,10 +195,10 @@ export default function BrandDashboard({ brand, onDiscover, onLogout, theme: t }
         {/* Tabs */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
           {[
-  { key: 'campaigns', label: '📋 My Campaigns' },
-  { key: 'applications', label: `📨 Applications (${applications.length})` },
-  { key: 'creators', label: '🎥 Local Creators' },
-].map(tb => (
+            { key: 'campaigns', label: '📋 My Campaigns' },
+            { key: 'applications', label: `📨 Applications (${applications.length})` },
+            { key: 'creators', label: '🎥 Local Creators' },
+          ].map(tb => (
             <button key={tb.key} onClick={() => setTab(tb.key)} style={{
               background: tab === tb.key ? t.purple : t.card,
               color: tab === tb.key ? 'white' : t.muted,
@@ -244,7 +257,8 @@ export default function BrandDashboard({ brand, onDiscover, onLogout, theme: t }
                 )}
               </div>
             )}
-              {/* Applications Tab */}
+
+            {/* Applications Tab */}
             {tab === 'applications' && (
               <div>
                 {applications.length === 0 ? (
@@ -256,56 +270,100 @@ export default function BrandDashboard({ brand, onDiscover, onLogout, theme: t }
                 ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '14px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {applications.map(a => (
-                      <button key={a.id} onClick={() => setSelectedApplicationId(a.id)} style={{
-                        ...card,
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        background: selectedApplication?.id === a.id ? 'rgba(139,92,246,0.18)' : t.card,
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                          <div>
-                            <div style={{ fontWeight: '700', fontSize: '15px' }}>{a.creatorName}</div>
-                            <div style={{ color: t.muted, fontSize: '12px', marginTop: '2px' }}>{a.creatorInstagram} · {a.creatorCity}</div>
+                      {applications.map(a => (
+                        <button key={a.id} onClick={() => setSelectedApplicationId(a.id)} style={{
+                          ...card,
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          background: selectedApplication?.id === a.id ? 'rgba(139,92,246,0.18)' : t.card,
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                            <div>
+                              <div style={{ fontWeight: '700', fontSize: '15px' }}>{a.creatorName}</div>
+                              <div style={{ color: t.muted, fontSize: '12px', marginTop: '2px' }}>{a.creatorInstagram} · {a.creatorCity}</div>
+                            </div>
+                            <div style={{
+                              background: getColor(a.creatorScore || 0),
+                              color: 'white', borderRadius: '8px',
+                              padding: '4px 10px', fontWeight: '800', fontSize: '16px'
+                            }}>{a.creatorScore}</div>
                           </div>
-                          <div style={{
-                            background: getColor(a.creatorScore || 0),
-                            color: 'white', borderRadius: '8px',
-                            padding: '4px 10px', fontWeight: '800', fontSize: '16px'
-                          }}>{a.creatorScore}</div>
-                        </div>
-                        <div style={{ fontSize: '13px', color: t.muted, marginBottom: '10px' }}>
-                          Applied for: <b style={{ color: t.text }}>{a.campaignTitle}</b>
-                        </div>
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                          <span style={{
-                            background: a.status === 'approved' ? '#10b981' : a.status === 'rejected' ? '#e57373' : '#f0a500',
-                            color: 'white',
-                            padding: '3px 10px',
-                            borderRadius: '20px',
-                            fontSize: '11px',
-                            fontWeight: '700',
-                            textTransform: 'uppercase',
-                          }}>{a.status || 'pending'}</span>
-                          <span onClick={(event) => { event.stopPropagation(); updateApplicationStatus(a.id, 'approved') }} style={{
-                            background: '#10b981',
-                            color: 'white',
-                            padding: '5px 10px',
-                            borderRadius: '8px',
-                            fontSize: '11px',
-                            fontWeight: 800,
-                          }}>Approve</span>
-                          <span onClick={(event) => { event.stopPropagation(); updateApplicationStatus(a.id, 'rejected') }} style={{
-                            background: '#e57373',
-                            color: 'white',
-                            padding: '5px 10px',
-                            borderRadius: '8px',
-                            fontSize: '11px',
-                            fontWeight: 800,
-                          }}>Reject</span>
-                        </div>
-                      </button>
-                    ))}
+                          <div style={{ fontSize: '13px', color: t.muted, marginBottom: '10px' }}>
+                            Applied for: <b style={{ color: t.text }}>{a.campaignTitle}</b>
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <span style={{
+                              background: a.status === 'approved' ? '#10b981' : a.status === 'rejected' ? '#e57373' : '#f0a500',
+                              color: 'white',
+                              padding: '3px 10px',
+                              borderRadius: '20px',
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              textTransform: 'uppercase',
+                            }}>{a.status || 'pending'}</span>
+                            <span onClick={(event) => { event.stopPropagation(); updateApplicationStatus(a.id, 'approved') }} style={{
+                              background: '#10b981',
+                              color: 'white',
+                              padding: '5px 10px',
+                              borderRadius: '8px',
+                              fontSize: '11px',
+                              fontWeight: 800,
+                            }}>Approve</span>
+                            <span onClick={(event) => { event.stopPropagation(); updateApplicationStatus(a.id, 'rejected') }} style={{
+                              background: '#e57373',
+                              color: 'white',
+                              padding: '5px 10px',
+                              borderRadius: '8px',
+                              fontSize: '11px',
+                              fontWeight: 800,
+                            }}>Reject</span>
+                          </div>
+
+                          {/* Escrow section - shows after approval */}
+                          {a.status === 'approved' && (() => {
+                            let escrow = getEscrowByApplication(a.id)
+                            if (!escrow) {
+                              const matchingCampaign = campaigns.find(camp => camp.id === a.campaignId)
+                              const budgetAmount = parseBudgetToNumber(matchingCampaign?.budget)
+                              escrow = createEscrow(a, budgetAmount)
+                            }
+                          
+                            return (
+                              <div style={{
+                                marginTop: '10px', padding: '10px',
+                                background: t.dark ? 'rgba(124,77,204,0.15)' : '#f5eeff',
+                                borderRadius: '8px', border: `1px solid ${t.border}`
+                              }} onClick={(event) => event.stopPropagation()}>
+                                <div style={{ fontSize: '11px', color: t.muted, marginBottom: '6px', fontWeight: '700' }}>💰 ESCROW PAYMENT</div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '3px' }}>
+                                  <span style={{ color: t.muted }}>Total Amount</span>
+                                  <span style={{ fontWeight: '700' }}>₹{escrow.totalAmount.toLocaleString('en-IN')}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '3px' }}>
+                                  <span style={{ color: t.muted }}>LOKL Commission (10%)</span>
+                                  <span style={{ fontWeight: '700', color: '#e57373' }}>-₹{escrow.commission.toLocaleString('en-IN')}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px', paddingTop: '4px', borderTop: `1px solid ${t.border}` }}>
+                                  <span style={{ fontWeight: '700' }}>Creator Receives</span>
+                                  <span style={{ fontWeight: '800', color: '#10b981' }}>₹{escrow.creatorPayout.toLocaleString('en-IN')}</span>
+                                </div>
+                                {escrow.status === 'held' ? (
+                                  <button onClick={() => handleReleasePayment(a.id)} style={{
+                                    width: '100%', background: '#10b981', color: 'white',
+                                    border: 'none', padding: '8px', borderRadius: '6px',
+                                    fontSize: '12px', fontWeight: '700', cursor: 'pointer'
+                                  }}>✅ Mark Work Complete & Release Payment</button>
+                                ) : (
+                                  <div style={{
+                                    textAlign: 'center', background: '#10b981', color: 'white',
+                                    padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: '700'
+                                  }}>🎉 Payment Released to Creator</div>
+                                )}
+                              </div>
+                            )
+                          })()}
+                        </button>
+                      ))}
                     </div>
                     <ApplicationChat
                       application={selectedApplication}
@@ -323,6 +381,7 @@ export default function BrandDashboard({ brand, onDiscover, onLogout, theme: t }
                 )}
               </div>
             )}
+
             {/* Local Creators Tab */}
             {tab === 'creators' && (
               <div>

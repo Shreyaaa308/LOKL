@@ -173,3 +173,78 @@ export const getLocalMessages = (applicationId) => {
     .filter((message) => message.applicationId === applicationId)
     .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0))
 }
+export const createEscrow = (application, budgetAmount) => {
+  const accounts = readAccounts()
+  const commissionRate = 0.10 // LOKL takes 10% commission
+  const commission = Math.round(budgetAmount * commissionRate)
+  const creatorPayout = budgetAmount - commission
+
+  const escrow = {
+    id: `escrow-${application.id}`,
+    applicationId: application.id,
+    campaignId: application.campaignId,
+    campaignTitle: application.campaignTitle,
+    brandId: application.brandId,
+    brandName: application.brandName,
+    creatorId: application.creatorId,
+    creatorName: application.creatorName,
+    creatorInstagram: application.creatorInstagram,
+    totalAmount: budgetAmount,
+    commission,
+    creatorPayout,
+    status: 'held', // held -> released
+    createdAt: new Date().toISOString(),
+    releasedAt: null,
+  }
+
+  const escrows = accounts.escrows || []
+  accounts.escrows = [
+    ...escrows.filter((e) => e.applicationId !== application.id),
+    escrow,
+  ]
+  writeAccounts(accounts)
+  return escrow
+}
+
+export const getEscrows = () => {
+  const accounts = readAccounts()
+  return accounts.escrows || []
+}
+
+export const getEscrowByApplication = (applicationId) => {
+  const accounts = readAccounts()
+  return (accounts.escrows || []).find((e) => e.applicationId === applicationId)
+}
+
+export const releaseEscrow = (applicationId) => {
+  const accounts = readAccounts()
+  accounts.escrows = (accounts.escrows || []).map((e) =>
+    e.applicationId === applicationId
+      ? { ...e, status: 'released', releasedAt: new Date().toISOString() }
+      : e
+  )
+  writeAccounts(accounts)
+  return accounts.escrows.find((e) => e.applicationId === applicationId)
+}
+
+export const getCreatorEscrows = (creatorId, creatorInstagram) => {
+  const accounts = readAccounts()
+  const norm = normalize(creatorInstagram)
+  return (accounts.escrows || []).filter((e) =>
+    (creatorId && e.creatorId === creatorId) ||
+    normalize(e.creatorInstagram) === norm
+  )
+}
+
+export const getBrandEscrows = (brandId) => {
+  const accounts = readAccounts()
+  return (accounts.escrows || []).filter((e) => e.brandId === brandId)
+}
+
+export function parseBudgetToNumber(budgetString = '') {
+  // Converts "₹15,000 – ₹50,000" or "₹999/mo" style strings to a usable number (takes lower bound or single value)
+  const numbers = budgetString.match(/[\d,]+/g)
+  if (!numbers || numbers.length === 0) return 5000 // fallback default
+  const firstNumber = parseInt(numbers[0].replace(/,/g, ''), 10)
+  return isNaN(firstNumber) ? 5000 : firstNumber
+}
