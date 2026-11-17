@@ -1,16 +1,23 @@
-# React + Vite
+# LOKL – Hyperlocal Creator Marketplace
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+LOKL is a hyperlocal creator marketplace designed to bridge the gap between local businesses and content creators. It helps businesses discover creators who align with their target audience through location-based, language-based, and relevance-driven matching.
 
-Currently, two official plugins are available:
+Unlike traditional influencer marketing platforms that focus primarily on follower counts, LOKL emphasizes local influence, audience relevance, and trust to make collaborations more meaningful and accessible.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+### Key Features
 
-## React Compiler
+- **Smart Creator Discovery:** Connects local businesses with creators based on location, language, and audience relevance.
+- **Local Relevance Score:** Evaluates how well a creator aligns with a business's target market and geographical audience.
+- **TrustTrace:** Promotes transparency and trust between creators and businesses.
+- **Campaign Management:** Simplifies the process of discovering, managing, and tracking creator collaborations.
+- **Secure Escrow Mechanism:** Aims to make collaboration payments safer and more transparent for both parties.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Tech Stack
+- Frontend: React.js, Vite
+- Backend / Database: Firebase
 
-## Expanding the ESLint configuration
+### Vision
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+To make creator marketing accessible beyond major influencers and metropolitan brands by empowering local businesses and regional creators to build authentic, mutually beneficial collaborations.
+
+**Built by Team Hello World | Hackfluence 2026 – IGDTUW Grand Finale**
