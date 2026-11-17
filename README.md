@@ -20,4 +20,4 @@ Unlike traditional influencer marketing platforms that focus primarily on follow
 
 To make creator marketing accessible beyond major influencers and metropolitan brands by empowering local businesses and regional creators to build authentic, mutually beneficial collaborations.
 
-**Built by Team Hello World | Hackfluence 2026 – IGDTUW Grand Finale**
+Authors: Shreya Arya , Shreya Jain
